@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# Working dirs (sidecar caches downloaded audio + models here)
+_work/
+sidecar/tests/fixtures/*.wav
+
+# Rust / Tauri (added when scaffolded)
+target/
+src-tauri/target/
+
+# Frontend (added when scaffolded)
+node_modules/
+.next/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+!.vscode/settings.json
+
+# Logs
+*.log
+logs/
+
+# Models (downloaded on first run, not committed)
+*.bin
+*.onnx
+models/

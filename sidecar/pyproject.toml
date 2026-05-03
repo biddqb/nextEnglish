@@ -1,0 +1,52 @@
+[project]
+name = "nextenglish-sidecar"
+version = "0.1.0"
+description = "Audio analysis sidecar for nextEnglish: ingest, transcribe, score shadowing attempts"
+requires-python = ">=3.11"
+authors = [{ name = "louis.nguyen", email = "louis.nguyen@overdose.digital" }]
+dependencies = [
+    # HTTP layer (fast imports — kept eager)
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "pydantic>=2.6,<3",
+    "loguru>=0.7",
+    "typer>=0.12",
+    # Heavy ML / DSP — lazy-imported inside handlers per eng-review P1A
+    "yt-dlp>=2024.1",
+    "faster-whisper>=1.0",
+    "praat-parselmouth>=0.4",
+    "librosa>=0.10",
+    "silero-vad>=5.0",
+    "numpy>=1.26",
+    "scipy>=1.13",
+    "soundfile>=0.12",
+    # Offline TTS for capture-to-Obsidian. Piper is neural, on-device, ONNX-
+    # backed; voices download once (~60–100MB) and run locally afterwards.
+    # Replaces an earlier gTTS dependency that violated the project's
+    # offline-first guarantee (see memory/project_offline_first.md).
+    "piper-tts>=1.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",
+]
+demucs = [
+    # Vocal isolation for music-backed clips. Opt-in, not pulled by default.
+    "demucs>=4.0",
+]
+
+[project.scripts]
+nextenglish-sidecar = "sidecar.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["sidecar"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"

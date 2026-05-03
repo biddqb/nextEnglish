@@ -1,0 +1,57 @@
+[package]
+name = "nextenglish-core"
+version = "0.1.0"
+edition = "2021"
+authors = ["louis.nguyen <louis.nguyen@overdose.digital>"]
+description = "Tauri 2 shell + Rust core for nextEnglish v1"
+default-run = "nextenglish"
+
+[lib]
+name = "nextenglish_core"
+path = "src/lib.rs"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "nextenglish"
+path = "src/main.rs"
+
+# Standalone CLI smoke tester. Same Rust core, no Tauri shell. Run with:
+#   cargo run --bin nextenglish-cli -- health
+#   cargo run --bin nextenglish-cli -- ingest --url <URL> --db <PATH>
+[[bin]]
+name = "nextenglish-cli"
+path = "src/bin/cli.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "process", "time", "io-util", "sync"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+thiserror = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+tracing-appender = "0.2"
+clap = { version = "4", features = ["derive"] }
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1"
+once_cell = "1"
+base64 = "0.22"
+sha2 = "0.10"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-clipboard-manager = "2"
+# Keystroke simulation so the capture hotkey can auto-press Ctrl+C in the
+# focused app, eliminating the explicit "copy first" step.
+enigo = "0.3"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+strip = true

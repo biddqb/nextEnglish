@@ -1,0 +1,192 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* UI_DESIGN.md typography classes. Composed in @layer components so they can
+   be combined with utilities. Waldenburg Light (the brand display face) is
+   licensed; EB Garamond is the open-source substitute called out in the doc. */
+@layer base {
+  html, body, #root {
+    height: 100%;
+    margin: 0;
+    background: theme('colors.canvas');
+    color: theme('colors.ink');
+    font-family: theme('fontFamily.body');
+    font-size: 16px;
+    line-height: 1.5;
+    letter-spacing: 0.16px;
+  }
+
+  /* Reset Tauri-default focus on body, but keep keyboard focus rings on
+     interactive elements (UI_DESIGN universal rule: never remove focus
+     without replacing). */
+  :focus-visible {
+    outline: 2px solid theme('colors.ink');
+    outline-offset: 2px;
+  }
+
+  button, input, select, textarea {
+    font: inherit;
+  }
+}
+
+@layer components {
+  /* Display tier (Waldenburg Light substitute = EB Garamond at 300). */
+  .text-display-mega {
+    font-family: theme('fontFamily.display');
+    font-weight: 300;
+    font-size: 64px;
+    line-height: 1.05;
+    letter-spacing: -1.92px;
+  }
+  .text-display-xl {
+    font-family: theme('fontFamily.display');
+    font-weight: 300;
+    font-size: 48px;
+    line-height: 1.08;
+    letter-spacing: -0.96px;
+  }
+  .text-display-lg {
+    font-family: theme('fontFamily.display');
+    font-weight: 300;
+    font-size: 36px;
+    line-height: 1.17;
+    letter-spacing: -0.36px;
+  }
+  .text-display-md {
+    font-family: theme('fontFamily.display');
+    font-weight: 300;
+    font-size: 32px;
+    line-height: 1.13;
+    letter-spacing: -0.32px;
+  }
+  .text-display-sm {
+    font-family: theme('fontFamily.display');
+    font-weight: 300;
+    font-size: 24px;
+    line-height: 1.2;
+  }
+
+  /* Title / body (Inter). */
+  .text-title-md {
+    font-family: theme('fontFamily.body');
+    font-weight: 500;
+    font-size: 20px;
+    line-height: 1.35;
+  }
+  .text-title-sm {
+    font-family: theme('fontFamily.body');
+    font-weight: 500;
+    font-size: 18px;
+    line-height: 1.44;
+    letter-spacing: 0.18px;
+  }
+  .text-body-md {
+    font-family: theme('fontFamily.body');
+    font-weight: 400;
+    font-size: 16px;
+    line-height: 1.5;
+    letter-spacing: 0.16px;
+  }
+  .text-body-strong {
+    font-family: theme('fontFamily.body');
+    font-weight: 500;
+    font-size: 16px;
+    line-height: 1.5;
+    letter-spacing: 0.16px;
+  }
+  .text-body-sm {
+    font-family: theme('fontFamily.body');
+    font-weight: 400;
+    font-size: 15px;
+    line-height: 1.47;
+    letter-spacing: 0.15px;
+  }
+  .text-caption {
+    font-family: theme('fontFamily.body');
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .text-caption-uppercase {
+    font-family: theme('fontFamily.body');
+    font-weight: 600;
+    font-size: 12px;
+    line-height: 1.4;
+    letter-spacing: 0.96px;
+    text-transform: uppercase;
+  }
+  .text-button {
+    font-family: theme('fontFamily.body');
+    font-weight: 500;
+    font-size: 15px;
+    line-height: 1;
+  }
+
+  /* Component primitives — composed of theme tokens, used by multiple
+     React components in src/components/. */
+  .button-primary {
+    @apply text-button text-on-primary bg-ink-press hover:bg-ink active:bg-ink
+           rounded-full px-md py-[10px] h-[40px] inline-flex items-center justify-center
+           transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .button-outline {
+    @apply text-button text-ink bg-transparent border border-hairline-strong
+           hover:border-ink rounded-full px-md py-[10px] h-[40px] inline-flex items-center justify-center
+           transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .button-tertiary {
+    @apply text-button text-ink bg-transparent hover:underline
+           inline-flex items-center justify-center disabled:opacity-40;
+  }
+
+  .text-input {
+    @apply h-[44px] px-base py-sm rounded-md bg-surface-card text-ink
+           border border-hairline-strong focus:border-transparent
+           placeholder:text-muted-soft;
+  }
+
+  .gradient-orb-mint {
+    background: radial-gradient(
+      circle at center,
+      theme('colors.gradient-mint') 0%,
+      transparent 60%
+    );
+  }
+  .gradient-orb-peach {
+    background: radial-gradient(
+      circle at center,
+      theme('colors.gradient-peach') 0%,
+      transparent 60%
+    );
+  }
+  .gradient-orb-lavender {
+    background: radial-gradient(
+      circle at center,
+      theme('colors.gradient-lavender') 0%,
+      transparent 60%
+    );
+  }
+}
+
+/* Score-card number entrance: tweens from 0 over 600ms ease-out per design 3A. */
+@keyframes score-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.score-rise { animation: score-rise 600ms ease-out both; }
+
+/* Empty-state orb drift (12s linear infinite per UI_DESIGN.md). */
+@keyframes orb-drift {
+  0%   { transform: translate(0, 0) scale(1); }
+  50%  { transform: translate(8px, 12px) scale(1.04); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+.orb-drift { animation: orb-drift 12s linear infinite; }
+
+/* Record-button "listening" pulse — soft, 1.2s. */
+@keyframes listen-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(244, 197, 168, 0.45); }
+  50%      { box-shadow: 0 0 0 16px rgba(244, 197, 168, 0); }
+}
+.listen-pulse { animation: listen-pulse 1.2s ease-in-out infinite; }
