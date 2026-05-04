@@ -133,7 +133,7 @@ describe("ShadowSession — save-card star toggle", () => {
     render(<ShadowSession clipId={1} segmentIndex={0} />);
 
     const star = screen.getByLabelText("Save for review");
-    expect(star.textContent).toBe("☆");
+    expect(star.textContent).toMatch(/^☆\s*Save$/);
     expect(star).toHaveAttribute("aria-pressed", "false");
 
     await userEvent.click(star);
@@ -151,7 +151,7 @@ describe("ShadowSession — save-card star toggle", () => {
     render(<ShadowSession clipId={1} segmentIndex={0} />);
 
     const star = screen.getByLabelText("Remove from review queue");
-    expect(star.textContent).toBe("★");
+    expect(star.textContent).toMatch(/^★\s*Saved$/);
     expect(star).toHaveAttribute("aria-pressed", "true");
 
     await userEvent.click(star);

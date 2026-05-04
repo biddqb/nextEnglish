@@ -241,7 +241,7 @@ export function ShadowSession({
           aria-label={isSaved ? "Remove from review queue" : "Save for review"}
           title={isSaved ? "Saved · click to remove" : "Save for review"}
           className={clsx(
-            "flex h-6 w-6 items-center justify-center rounded-md transition",
+            "inline-flex items-center gap-xxs rounded-md px-xs h-6 text-caption-uppercase transition",
             isSaved
               ? "text-ink"
               : "text-muted-soft hover:text-ink",
@@ -250,6 +250,7 @@ export function ShadowSession({
           <span aria-hidden="true" className="text-body-md leading-none">
             {isSaved ? "★" : "☆"}
           </span>
+          <span>{isSaved ? "Saved" : "Save"}</span>
         </button>
       </div>
       <h2 className="text-display-md text-ink mb-base">{seg.text}</h2>

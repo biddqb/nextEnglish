@@ -33,29 +33,44 @@ export function Sidebar() {
       )}
     >
       <div className="border-b border-hairline p-sm space-y-xs">
-        {dueCount > 0 && (
-          <button
-            onClick={() => setPane("review")}
-            aria-label={`Open review queue, ${dueCount} due`}
-            title={`${dueCount} card${dueCount === 1 ? "" : "s"} due for review`}
-            className={clsx(
-              "flex w-full items-center justify-between rounded-full border px-md h-[40px] text-button transition-colors",
-              pane === "review"
-                ? "border-ink bg-ink text-on-primary"
-                : "border-hairline-strong text-ink hover:border-ink",
-              collapsed && "px-0 justify-center",
-            )}
-          >
-            {collapsed ? (
+        <button
+          onClick={() => setPane("review")}
+          aria-label={
+            dueCount > 0
+              ? `Open review queue, ${dueCount} due`
+              : "Open review queue (caught up)"
+          }
+          title={
+            dueCount > 0
+              ? `${dueCount} card${dueCount === 1 ? "" : "s"} due for review`
+              : "All caught up"
+          }
+          className={clsx(
+            "flex w-full items-center justify-between rounded-full border px-md h-[40px] text-button transition-colors",
+            pane === "review"
+              ? "border-ink bg-ink text-on-primary"
+              : dueCount > 0
+                ? "border-hairline-strong text-ink hover:border-ink"
+                : "border-hairline text-muted hover:text-ink hover:border-hairline-strong",
+            collapsed && "px-0 justify-center",
+          )}
+        >
+          {collapsed ? (
+            <span className="tabular-nums">
+              {dueCount > 0 ? dueCount : "·"}
+            </span>
+          ) : dueCount > 0 ? (
+            <>
+              <span>Reviews due</span>
               <span className="tabular-nums">{dueCount}</span>
-            ) : (
-              <>
-                <span>Reviews due</span>
-                <span className="tabular-nums">{dueCount}</span>
-              </>
-            )}
-          </button>
-        )}
+            </>
+          ) : (
+            <>
+              <span>Reviews</span>
+              <span className="text-caption-uppercase">caught up</span>
+            </>
+          )}
+        </button>
         <button
           onClick={() => selectClip(null)}
           className={clsx(
