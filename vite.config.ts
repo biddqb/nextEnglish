@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -23,5 +24,12 @@ export default defineConfig(async () => ({
       // Don't trigger frontend rebuilds when Rust files change.
       ignored: ["**/src-tauri/**", "**/sidecar/**"],
     },
+  },
+  test: {
+    environment: "jsdom",
+    globals: true,
+    setupFiles: ["./src/test/setup.ts"],
+    css: false,
+    include: ["src/**/*.test.{ts,tsx}"],
   },
 }));
