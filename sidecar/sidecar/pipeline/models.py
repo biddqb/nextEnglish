@@ -132,3 +132,20 @@ class TtsResponse(BaseModel):
     ok: Literal[True] = True
     audio_path: str
     duration_ms: int
+
+
+class VoiceTranscribeRequest(BaseModel):
+    """Voice module: transcribe a standalone recording (no reference text).
+    Used by the Voice studio's filler / pacing / minimal-pair sub-modes."""
+    audio_path: str
+    model_name: Optional[str] = None
+
+
+class VoiceTranscribeResponse(BaseModel):
+    ok: Literal[True] = True
+    # Sentence-level segments with word-level timestamps; matches the same
+    # Segment shape Whisper returns for /ingest, just without clip wrapper.
+    segments: list[Segment]
+    # Total audio duration (ms) — useful for WPM calculations even when the
+    # last word's `end` doesn't reach the end of the recording.
+    duration_ms: int

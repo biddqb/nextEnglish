@@ -51,6 +51,15 @@ pub struct ScoreData {
     pub user_transcript: String,
 }
 
+/// Voice module: transcript + duration of a standalone recording. No
+/// scoring against a reference — the frontend does its own per-sub-mode
+/// analysis on the returned segments (filler counts, WPM, etc.).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VoiceTranscribeData {
+    pub segments: Vec<Segment>,
+    pub duration_ms: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClipRow {
     pub id: i64,

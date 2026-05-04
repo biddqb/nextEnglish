@@ -21,6 +21,7 @@ from .pipeline.models import (
     PitchContour, PitchRequest, PitchResponse,
     ScoreRequest, ScoreResponse, ScoreData, Clip,
     TtsRequest, TtsResponse,
+    VoiceTranscribeRequest, VoiceTranscribeResponse,
 )
 
 
@@ -296,6 +297,52 @@ def tts(req: TtsRequest):
             f"unexpected {type(e).__name__}: {e}",
             status=500,
         )
+
+
+@app.post("/voice/transcribe")
+def voice_transcribe(req: VoiceTranscribeRequest):
+    """Voice module: transcribe a standalone recording. Used by the Voice
+    studio's filler-word detector, pacing analyzer, and minimal-pair drill.
+    Unlike /score this has no reference text — the transcript itself + its
+    word-level timestamps + the audio's total duration are all the caller
+    needs (filler counts, WPM, etc are computed in the frontend).
+
+    Normalizes WebM/M4A → WAV first since Whisper works best on PCM."""
+    from .pipeline.ingest import ensure_wav, get_duration_s
+    from .pipeline.transcribe import transcribe
+
+    audio = Path(req.audio_path)
+    if not audio.exists():
+        return _err("INTERNAL", f"User audio not found: {audio}", status=400)
+
+    try:
+        audio = ensure_wav(audio)
+    except Exception as e:
+        logger.exception("Normalize voice audio failed")
+        return _err(
+            "INTERNAL", f"Couldn't normalize voice audio: {e}", status=500,
+        )
+
+    try:
+        segments = transcribe(audio, model_name=req.model_name or "small.en")
+    except Exception as e:
+        logger.exception("Voice transcribe failed")
+        return _err(
+            "TRANSCRIPTION_FAILED", str(e)[:200], retryable=True, status=500,
+        )
+
+    try:
+        duration_s = get_duration_s(audio)
+    except Exception as e:
+        # Non-fatal — we can still return the transcript even if duration
+        # detection fails. Just zero it.
+        logger.warning(f"get_duration_s failed: {e}")
+        duration_s = 0.0
+
+    return VoiceTranscribeResponse(
+        segments=segments,
+        duration_ms=int(duration_s * 1000),
+    )
 
 
 def run():

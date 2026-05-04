@@ -19,7 +19,7 @@ use tokio::process::{Child, Command};
 use tracing::{debug, info, warn};
 
 use crate::error::{Error, ErrorEnvelope, Result};
-use crate::models::{Clip, ScoreData};
+use crate::models::{Clip, ScoreData, VoiceTranscribeData};
 
 const SPAWN_TIMEOUT: Duration = Duration::from_secs(30);
 const HEALTH_TIMEOUT: Duration = Duration::from_secs(5);
@@ -328,6 +328,18 @@ impl Sidecar {
         parse_score(resp)
     }
 
+    /// Call the sidecar's /voice/transcribe endpoint. Standalone recording,
+    /// no reference text — used by the Voice module's filler / pacing /
+    /// pair-drill sub-modes.
+    pub async fn voice_transcribe(
+        &self,
+        audio_path: &str,
+    ) -> Result<VoiceTranscribeData> {
+        let body = serde_json::json!({ "audio_path": audio_path });
+        let resp = self.post_json("/voice/transcribe", &body).await?;
+        parse_voice_transcribe(resp)
+    }
+
     async fn post_json(&self, path: &str, body: &serde_json::Value) -> Result<serde_json::Value> {
         let url = format!("{}{}", self.base_url, path);
         let resp = self.client.post(&url).json(body).send().await?;
@@ -462,6 +474,35 @@ fn parse_score(value: serde_json::Value) -> Result<ScoreData> {
             ErrorEnvelope::new(
                 crate::error::ErrorCode::Internal,
                 "score returned ok=false but no error envelope",
+            )
+        })))
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct VoiceTranscribeRawResponse {
+    ok: bool,
+    #[serde(default)]
+    segments: Option<Vec<crate::models::Segment>>,
+    #[serde(default)]
+    duration_ms: Option<i64>,
+    #[serde(default)]
+    error: Option<ErrorEnvelope>,
+}
+
+fn parse_voice_transcribe(value: serde_json::Value) -> Result<VoiceTranscribeData> {
+    let raw: VoiceTranscribeRawResponse = serde_json::from_value(value)?;
+    if raw.ok {
+        let segments = raw
+            .segments
+            .ok_or_else(|| Error::malformed("voice transcribe response missing 'segments'"))?;
+        let duration_ms = raw.duration_ms.unwrap_or(0);
+        Ok(VoiceTranscribeData { segments, duration_ms })
+    } else {
+        Err(Error::Api(raw.error.unwrap_or_else(|| {
+            ErrorEnvelope::new(
+                crate::error::ErrorCode::Internal,
+                "voice transcribe returned ok=false but no error envelope",
             )
         })))
     }

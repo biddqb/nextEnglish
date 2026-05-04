@@ -21,6 +21,7 @@ use tracing::{error, info};
 use crate::error::ErrorEnvelope;
 use crate::models::{
     AttemptRow, CardRow, Clip, ClipRow, DueCard, ScoreData, Segment, SegmentRow,
+    VoiceTranscribeData,
 };
 use crate::sidecar::{PitchContoursResponse, ProbeResult, Sidecar};
 use crate::Database;
@@ -1152,6 +1153,52 @@ pub async fn list_attempts(
             .into_owned();
     }
     Ok(rows)
+}
+
+/// Voice module: persist a standalone recording to a temp-ish path and
+/// transcribe it. Unlike `save_attempt` + `score_attempt`, this is a single
+/// round-trip — there's no segment context, no DB persistence, no scoring.
+/// The file lands under `<sidecar_root>/_work/voice/<ts>.<ext>` so the
+/// sidecar (which uses the sidecar root as cwd) can find it.
+///
+/// Returns the transcript + duration; the frontend computes per-sub-mode
+/// stats (filler counts, WPM, etc) from the segments.
+#[tauri::command]
+pub async fn transcribe_voice_audio(
+    state: State<'_, AppState>,
+    audio_base64: String,
+    extension: String,
+) -> Result<VoiceTranscribeData, CmdError> {
+    let bytes = B64
+        .decode(audio_base64.as_bytes())
+        .map_err(|e| cmd_err("INTERNAL", format!("base64 decode: {e}")))?;
+
+    let voice_dir = state.sidecar_root.join("_work").join("voice");
+    fs::create_dir_all(&voice_dir).await.map_err(|e| {
+        cmd_err("INTERNAL", format!("create voice dir: {e}"))
+    })?;
+
+    let ts = chrono::Utc::now().format("%Y%m%dT%H%M%S%3f");
+    let safe_ext = extension
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .collect::<String>();
+    let filename = format!("{ts}.{safe_ext}");
+    let out_path = voice_dir.join(&filename);
+
+    fs::write(&out_path, &bytes).await.map_err(|e| {
+        cmd_err("INTERNAL", format!("write voice audio: {e}"))
+    })?;
+
+    info!(?out_path, bytes = bytes.len(), "voice audio saved");
+
+    let result = state
+        .sidecar
+        .voice_transcribe(&out_path.to_string_lossy())
+        .await
+        .map_err(CmdError::from)?;
+
+    Ok(result)
 }
 
 async fn slice_audio(

@@ -395,6 +395,17 @@ export function useSetCardCloze() {
 
 export type { CardRow };
 
+// Voice module: transcribe a standalone recording. Single round-trip; no
+// persistence beyond the temp file the Rust shell writes. The frontend's
+// per-sub-mode logic (filler counts, WPM, pair distinctness) consumes
+// the returned segments + duration directly.
+export function useTranscribeVoiceAudio() {
+  return useMutation({
+    mutationFn: (args: { audioBase64: string; extension: string }) =>
+      api.transcribeVoiceAudio(args.audioBase64, args.extension),
+  });
+}
+
 // Optimistic helper: a "most recent first" sorted clips list (the sidebar
 // already orders DESC on created_at server-side, but useful for UI sort
 // guarantees if needed).

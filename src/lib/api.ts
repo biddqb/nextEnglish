@@ -11,6 +11,7 @@ import type {
   PitchContoursResponse,
   ProbeResult,
   ScoreData,
+  Segment,
   SegmentBest,
   SegmentRow,
   SettingPair,
@@ -179,6 +180,17 @@ export const api = {
 
   simulateCopyKeystroke: () =>
     call<void>("simulate_copy_keystroke"),
+
+  transcribeVoiceAudio: (audioBase64: string, extension: string) =>
+    call<VoiceTranscribeData>("transcribe_voice_audio", {
+      audioBase64,
+      extension,
+    }),
+};
+
+export type VoiceTranscribeData = {
+  segments: Segment[];
+  duration_ms: number;
 };
 
 // Returned by get_clip — includes the full segments list (with words) plus
