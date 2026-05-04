@@ -1,24 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
-import {
-  useDueCards,
-  useRecordReview,
-  useSaveAttempt,
-  useScoreAttempt,
-} from "../lib/queries";
-import { useStore } from "../lib/store";
-import { startRecording, tauriFileUrl, type RecorderHandle } from "../lib/audio";
-import { applyReview, previewIntervals, type RatingButton } from "../lib/fsrs";
-import { clozeBlankFor, tokenizeForCloze } from "../lib/cloze";
-import { RecordButton } from "./RecordButton";
-import { WaveformMeter } from "./WaveformMeter";
-import { ScoreCard } from "./ScoreCard";
-import type { DueCard, ScoreData } from "../lib/types";
+import { useDueCards, useRecordReview } from "../../lib/queries";
+import { useStore } from "../../lib/store";
+import { tauriFileUrl } from "../../lib/audio";
+import { useRecordAndScore } from "../../lib/recording";
+import { applyReview, previewIntervals, type RatingButton } from "../../lib/fsrs";
+import { clozeBlankFor, tokenizeForCloze } from "../../lib/cloze";
+import { RecordButton } from "../../components/RecordButton";
+import { WaveformMeter } from "../../components/WaveformMeter";
+import { ScoreCard } from "../../components/ScoreCard";
+import type { DueCard, ScoreData } from "../../lib/types";
+import { setBusy, setCancelImpl } from "./state";
 
 // SRS review queue. Pulls due cards, presents them one at a time inside a
-// trimmed-down ShadowSession, then surfaces four FSRS rating buttons after
+// trimmed-down recording flow, then surfaces four FSRS rating buttons after
 // the user scores their attempt. The ts-fsrs scheduler computes the next
 // state in TS; the Rust side just persists.
+//
+// Local state machine (always was — Issue 3A confirms this is the right
+// pattern; Shadow now matches):
+//   idle → recording → analyzing → scored → (rating advances cursor)
 type Phase =
   | { kind: "idle" }
   | { kind: "listening" }
@@ -33,13 +34,26 @@ export function ReviewMode() {
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [recordError, setRecordError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const recorderRef = useRef<RecorderHandle | null>(null);
 
-  const saveAttempt = useSaveAttempt();
-  const scoreAttempt = useScoreAttempt();
   const recordReview = useRecordReview();
 
   const card: DueCard | undefined = queue?.[cursor];
+
+  // The recording hook needs clip+segment to identify the attempt; SRS
+  // pulls those from the active card, with safe defaults when card is
+  // undefined (the start/stop calls below also gate on card).
+  const recording = useRecordAndScore({
+    clipId: card?.clip_id ?? 0,
+    segmentIndex: card?.segment_index ?? 0,
+    onRecordingStarted: () => setPhase({ kind: "recording" }),
+    onAnalyzing: () => setPhase({ kind: "analyzing" }),
+    onScored: (path: string, score: ScoreData) =>
+      setPhase({ kind: "scored", userAudioPath: path, score }),
+    onError: (msg) => {
+      setRecordError(msg);
+      setPhase({ kind: "idle" });
+    },
+  });
 
   const refSrc = useMemo(
     () => (card ? tauriFileUrl(card.clip_audio_path) : undefined),
@@ -56,13 +70,35 @@ export function ReviewMode() {
     }
   }, [card?.card.id]);
 
+  // Report busy state to the module-level singleton so srsModule.isBusy()
+  // returns the right answer for the shell's Esc handler.
+  useEffect(() => {
+    setBusy(
+      phase.kind === "listening" ||
+        phase.kind === "recording" ||
+        phase.kind === "analyzing",
+    );
+  }, [phase.kind]);
+  useEffect(() => () => setBusy(false), []);
+
+  // Register cancel impl so the shell can call it on Esc.
+  useEffect(() => {
+    setCancelImpl(() => {
+      setPhase({ kind: "idle" });
+      recording.cancel();
+    });
+    return () => setCancelImpl(null);
+    // recording.cancel is stable (closes over a ref).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Tear down recorder + audio on unmount.
   useEffect(() => {
     return () => {
-      recorderRef.current?.cancel();
-      recorderRef.current = null;
+      recording.cancel();
       audioRef.current?.pause();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (isLoading) {
@@ -111,51 +147,15 @@ export function ReviewMode() {
   async function startRecordingFlow() {
     if (!card) return;
     setRecordError(null);
-    try {
-      playReference();
-      const handle = await startRecording();
-      recorderRef.current = handle;
-      setPhase({ kind: "recording" });
-    } catch (e) {
-      setRecordError(messageOf(e));
-      setPhase({ kind: "idle" });
-    }
-  }
-
-  async function stopRecordingFlow() {
-    if (!card) return;
-    const handle = recorderRef.current;
-    recorderRef.current = null;
-    if (!handle) return;
-
-    const audio = await handle.stop();
-    const b64 = await audio.base64;
-
-    setPhase({ kind: "analyzing" });
-    try {
-      const path = await saveAttempt.mutateAsync({
-        clipId: card.clip_id,
-        segmentIndex: card.segment_index,
-        audioBase64: b64,
-        extension: audio.extension,
-      });
-      const score = await scoreAttempt.mutateAsync({
-        clipId: card.clip_id,
-        segmentIndex: card.segment_index,
-        attemptAudioPath: path,
-      });
-      setPhase({ kind: "scored", userAudioPath: path, score });
-    } catch (e) {
-      setRecordError(messageOf(e));
-      setPhase({ kind: "idle" });
-    }
+    playReference();
+    await recording.start();
   }
 
   function onRecordButtonClick() {
     if (phase.kind === "idle" || phase.kind === "scored") {
       void startRecordingFlow();
     } else if (phase.kind === "recording" || phase.kind === "listening") {
-      void stopRecordingFlow();
+      void recording.stop();
     }
   }
 
@@ -242,10 +242,7 @@ export function ReviewMode() {
           disabled={phase.kind === "analyzing"}
         />
         {phase.kind === "recording" && (
-          <WaveformMeter
-            active={true}
-            getLevel={() => recorderRef.current?.meter() ?? 0}
-          />
+          <WaveformMeter active={true} getLevel={recording.meter} />
         )}
         {phase.kind === "analyzing" && (
           <div className="text-caption-uppercase text-muted listen-pulse">
@@ -403,10 +400,4 @@ function formatTimestamp(ms: number): string {
   const m = Math.floor(total / 60);
   const s = total % 60;
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
-
-function messageOf(e: unknown): string {
-  const x = e as { message?: string; code?: string };
-  if (x.code) return `${x.code}: ${x.message ?? "error"}`;
-  return x.message ?? String(e);
 }

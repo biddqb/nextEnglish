@@ -2,30 +2,36 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import {
   useClip,
-  useSaveAttempt,
   useSaveCard,
   useSavedSegments,
-  useScoreAttempt,
   useSettings,
   useUnsaveCard,
-} from "../lib/queries";
-import { useStore } from "../lib/store";
-import { startRecording, tauriFileUrl, type RecorderHandle } from "../lib/audio";
-import { RecordButton } from "./RecordButton";
-import { Scrubber } from "./Scrubber";
-import { ScoreCard } from "./ScoreCard";
-import { AttemptHistory } from "./AttemptHistory";
-import { ClozeEditor } from "./ClozeEditor";
-import { PitchOverlay } from "./PitchOverlay";
-import { WaveformMeter } from "./WaveformMeter";
+} from "../../lib/queries";
+import { tauriFileUrl } from "../../lib/audio";
+import { useRecordAndScore } from "../../lib/recording";
+import type { ScoreData, SessionState } from "../../lib/types";
+import { RecordButton } from "../../components/RecordButton";
+import { Scrubber } from "../../components/Scrubber";
+import { ScoreCard } from "../../components/ScoreCard";
+import { AttemptHistory } from "../../components/AttemptHistory";
+// Per Issue 1A: ClozeEditor lives in the srs module. Shadow imports it for
+// the during-shadowing edit-card workflow (visible only when the segment is
+// saved). This is the one cross-module import in v2 — explicit and one-way.
+import { ClozeEditor } from "../srs/ClozeEditor";
+import { PitchOverlay } from "../../components/PitchOverlay";
+import { WaveformMeter } from "../../components/WaveformMeter";
+import { setBusy, setCancelImpl } from "./state";
 
 // The shadowing loop. Plays reference audio for the selected segment, captures
 // user audio via MediaRecorder, sends to Rust for scoring, shows ScoreCard.
 //
-// State machine in zustand store:
+// Local state machine (moved out of zustand per Issue 3A):
 //   idle → listening (auto-plays reference) → recording → analyzing → scored
 //                                                                       ↓
 //                                                                  try-again → idle
+//
+// `setBusy()` reports the current busy state to ./state so the shell's
+// Esc-to-stop handler can read it via shadowModule.isBusy() in modules.tsx.
 export function ShadowSession({
   clipId,
   segmentIndex,
@@ -34,14 +40,9 @@ export function ShadowSession({
   segmentIndex: number;
 }) {
   const { data } = useClip(clipId);
-  const session = useStore((s) => s.session);
-  const startRecord = useStore((s) => s.startRecording);
-  const startAnalyzing = useStore((s) => s.startAnalyzing);
-  const setScore = useStore((s) => s.setScore);
-  const reset = useStore((s) => s.reset);
+  const [session, setSession] = useState<SessionState>({ kind: "idle" });
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const recorderRef = useRef<RecorderHandle | null>(null);
   const [refTime, setRefTime] = useState({ currentMs: 0, durationMs: 0 });
   const [recordError, setRecordError] = useState<string | null>(null);
   // Auto re-record countdown: a configurable editorial pause after scoring
@@ -56,12 +57,51 @@ export function ShadowSession({
   );
   const AUTO_LOOP_TICK_MS = 100;
 
-  const saveAttempt = useSaveAttempt();
-  const scoreAttempt = useScoreAttempt();
   const { data: saved } = useSavedSegments(clipId);
   const saveCard = useSaveCard();
   const unsaveCard = useUnsaveCard();
   const isSaved = (saved ?? []).includes(segmentIndex);
+
+  const recording = useRecordAndScore({
+    clipId,
+    segmentIndex,
+    onRecordingStarted: () => setSession({ kind: "recording", segmentIndex }),
+    onAnalyzing: () =>
+      setSession({ kind: "analyzing", segmentIndex, userAudioPath: "" }),
+    onScored: (path: string, score: ScoreData) =>
+      setSession({ kind: "scored", segmentIndex, userAudioPath: path, score }),
+    onError: (msg) => {
+      setRecordError(msg);
+      setSession({ kind: "idle" });
+    },
+  });
+
+  // Report busy-ness to the module-level state so shadowModule.isBusy() in
+  // src/lib/modules.tsx returns the right answer for the shell's Esc handler.
+  // Cleanup on unmount sets it back to false.
+  useEffect(() => {
+    setBusy(
+      session.kind === "listening" ||
+        session.kind === "recording" ||
+        session.kind === "analyzing",
+    );
+  }, [session.kind]);
+  useEffect(() => () => setBusy(false), []);
+
+  // Register a cancel implementation the shell can call from its Esc handler
+  // (via shadowModule.cancel()). Sets local session to idle and tears down
+  // the live recorder if any. Cleanup unregisters on unmount so a stale
+  // pointer doesn't fire callbacks into a dead component tree.
+  useEffect(() => {
+    setCancelImpl(() => {
+      setSession({ kind: "idle" });
+      recording.cancel();
+    });
+    return () => setCancelImpl(null);
+    // recording.cancel is stable (closes over a ref); fresh closures every
+    // render don't need to re-register since they call the same recorder.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function toggleSaveCard() {
     if (isSaved) {
@@ -84,6 +124,8 @@ export function ShadowSession({
   const refSegDurationMs = (seg?.end_ms ?? 0) - (seg?.start_ms ?? 0);
 
   // Keep audio element scrubbed within the segment range; auto-stop at end.
+  // Resetting session here covers segment-change while mid-recording (the
+  // user picks a different segment in the sidebar before stopping).
   useEffect(() => {
     const a = audioRef.current;
     if (!a || !seg) return;
@@ -91,6 +133,7 @@ export function ShadowSession({
     a.pause();
     setRefTime({ currentMs: 0, durationMs: refSegDurationMs });
     setRecordError(null);
+    setSession({ kind: "idle" });
   }, [seg, refStartS, refSegDurationMs]);
 
   function onTimeUpdate() {
@@ -117,66 +160,34 @@ export function ShadowSession({
 
   async function startRecordingFlow() {
     setRecordError(null);
-    try {
-      // Auto-play reference at the start of recording (UI_DESIGN flow).
-      playReference();
-      const handle = await startRecording();
-      recorderRef.current = handle;
-      startRecord(segmentIndex);
-    } catch (e) {
-      setRecordError(messageOf(e));
-      reset();
-    }
-  }
-
-  async function stopRecordingFlow() {
-    const handle = recorderRef.current;
-    recorderRef.current = null;
-    if (!handle) return;
-
-    const audio = await handle.stop();
-    const b64 = await audio.base64;
-
-    startAnalyzing(segmentIndex, "");
-    try {
-      const path = await saveAttempt.mutateAsync({
-        clipId,
-        segmentIndex,
-        audioBase64: b64,
-        extension: audio.extension,
-      });
-      const score = await scoreAttempt.mutateAsync({
-        clipId,
-        segmentIndex,
-        attemptAudioPath: path,
-      });
-      setScore(segmentIndex, path, score);
-    } catch (e) {
-      setRecordError(messageOf(e));
-      reset();
-    }
+    // Auto-play reference at the start of recording (UI_DESIGN flow).
+    playReference();
+    await recording.start();
   }
 
   function onRecordButtonClick() {
     if (session.kind === "idle" || session.kind === "scored") {
       void startRecordingFlow();
     } else if (session.kind === "recording" || session.kind === "listening") {
-      void stopRecordingFlow();
+      void recording.stop();
     }
   }
 
   // Cleanup on unmount: kill recorder + audio playback.
   useEffect(() => {
     return () => {
-      recorderRef.current?.cancel();
-      recorderRef.current = null;
+      recording.cancel();
       audioRef.current?.pause();
     };
+    // recording.cancel is stable (closes over a ref), don't make this an
+    // every-render cleanup.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Start the auto-loop countdown when entering scored; tear it down on any
-  // other state. (Switching segments resets the session via the store, so
-  // this also covers segment changes.) `autoLoopMs <= 0` disables the loop.
+  // other state. (Switching segments resets the session via the seg effect
+  // above, so this also covers segment changes.) `autoLoopMs <= 0` disables
+  // the loop.
   useEffect(() => {
     if (session.kind === "scored" && settings.autoLoopMs > 0) {
       setAutoLoopRemainingMs(settings.autoLoopMs);
@@ -191,7 +202,7 @@ export function ShadowSession({
     if (autoLoopRemainingMs == null) return;
     if (autoLoopRemainingMs <= 0) {
       setAutoLoopRemainingMs(null);
-      reset();
+      setSession({ kind: "idle" });
       void startRecordingFlow();
       return;
     }
@@ -201,6 +212,9 @@ export function ShadowSession({
       );
     }, AUTO_LOOP_TICK_MS);
     return () => clearTimeout(t);
+    // startRecordingFlow closes over recording.start which is fresh each
+    // render; including it would re-fire the timer effect every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoLoopRemainingMs]);
 
   function holdAutoLoop() {
@@ -288,10 +302,7 @@ export function ShadowSession({
           disabled={session.kind === "analyzing"}
         />
         {session.kind === "recording" && (
-          <WaveformMeter
-            active={true}
-            getLevel={() => recorderRef.current?.meter() ?? 0}
-          />
+          <WaveformMeter active={true} getLevel={recording.meter} />
         )}
         {session.kind === "analyzing" && (
           <div className="text-caption-uppercase text-muted listen-pulse">
@@ -311,7 +322,7 @@ export function ShadowSession({
             score={session.score}
             referenceText={seg.text}
             onTryAgain={() => {
-              reset();
+              setSession({ kind: "idle" });
               void startRecordingFlow();
             }}
             autoLoopRemainingMs={autoLoopRemainingMs}
@@ -345,14 +356,8 @@ export function ShadowSession({
   );
 }
 
-function recordStateOf(kind: string): "idle" | "listening" | "recording" {
+function recordStateOf(kind: SessionState["kind"]): "idle" | "listening" | "recording" {
   if (kind === "listening") return "listening";
   if (kind === "recording") return "recording";
   return "idle";
-}
-
-function messageOf(e: unknown): string {
-  const x = e as { message?: string; code?: string };
-  if (x.code) return `${x.code}: ${x.message ?? "error"}`;
-  return x.message ?? String(e);
 }

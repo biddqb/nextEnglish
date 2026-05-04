@@ -66,8 +66,16 @@
 // load-bearing this week, not the wiring.
 
 import type { ComponentType } from "react";
-import { ShadowSession } from "../components/ShadowSession";
-import { ReviewMode } from "../components/ReviewMode";
+import { ShadowSession } from "../modules/shadow/ShadowSession";
+import {
+  cancel as shadowCancel,
+  isBusy as shadowIsBusy,
+} from "../modules/shadow/state";
+import { ReviewMode } from "../modules/srs/ReviewMode";
+import {
+  cancel as srsCancel,
+  isBusy as srsIsBusy,
+} from "../modules/srs/state";
 
 export type ModuleId = "shadow" | "srs" | "voice" | "speak";
 
@@ -100,13 +108,13 @@ export interface SkillModule {
   // Returns true while the module is mid-recording or mid-analyzing. The
   // shell's Esc-to-stop keyboard handler reads this to decide whether to
   // claim Esc; without it, we'd have to leak module-internal state into the
-  // global zustand store (the pattern Shadow currently uses, which Issue 3A
-  // unwinds).
-  //
-  // Steps 5/6 wire this to each module's local state machine. Until then it
-  // returns false everywhere, which is safe because the existing code path
-  // still reads useStore.session in App.tsx.
+  // global zustand store (the pattern Shadow used pre-Issue-3A).
   isBusy: () => boolean;
+
+  // Tells the module to abort its current busy work — typically called by
+  // the shell on Esc when isBusy() is true. Optional because some modules
+  // never enter a busy state (e.g., a future read-only Voice analysis view).
+  cancel?: () => void;
 }
 
 // Adapter for Shadow: ShadowSession requires both clipId and segmentIndex.
@@ -132,9 +140,6 @@ function ReviewModeAdapter(_props: { clipId?: number; segmentIndex?: number }) {
   return <ReviewMode />;
 }
 
-// TODO step 5: move into src/modules/shadow/index.ts; wire isBusy() to the
-// component's local session state (after migrating it off zustand per Issue 3A);
-// expose AttemptHistory as ui.History.
 const shadowModule: SkillModule = {
   id: "shadow",
   displayName: "Shadow",
@@ -142,12 +147,10 @@ const shadowModule: SkillModule = {
   ui: {
     Session: ShadowSessionAdapter,
   },
-  isBusy: () => false,
+  isBusy: shadowIsBusy,
+  cancel: shadowCancel,
 };
 
-// TODO step 6: move into src/modules/srs/index.ts; wire isBusy() to ReviewMode's
-// local Phase state. ClozeEditor will be re-exported from this module so Shadow
-// can import it (Issue 1A).
 const srsModule: SkillModule = {
   id: "srs",
   displayName: "Review",
@@ -155,7 +158,8 @@ const srsModule: SkillModule = {
   ui: {
     Session: ReviewModeAdapter,
   },
-  isBusy: () => false,
+  isBusy: srsIsBusy,
+  cancel: srsCancel,
 };
 
 export const modules: SkillModule[] = [shadowModule, srsModule];

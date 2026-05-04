@@ -2,11 +2,16 @@ import { useEffect, useRef, useState } from "react";
 import { AppShell } from "./components/AppShell";
 import { EmptyStateHero } from "./components/EmptyStateHero";
 import { SegmentList } from "./components/SegmentList";
-import { ShadowSession } from "./components/ShadowSession";
+import { getModule } from "./lib/modules";
+
+// Active-pane components, resolved through the module registry. The shell
+// no longer hard-codes specific component imports — adding a third skill
+// module is now a registry edit, not a shell edit.
+const ShadowSession = getModule("shadow")!.ui.Session;
+const ReviewModeView = getModule("srs")!.ui.Session;
 import { ShortcutsOverlay } from "./components/ShortcutsOverlay";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { DropOverlay } from "./components/DropOverlay";
-import { ReviewMode } from "./components/ReviewMode";
 import { CaptureToast } from "./components/CaptureToast";
 import { useStore } from "./lib/store";
 import {
@@ -31,8 +36,9 @@ export default function App() {
   const selectedSegmentIndex = useStore((s) => s.selectedSegmentIndex);
   const selectClip = useStore((s) => s.selectClip);
   const selectSegment = useStore((s) => s.selectSegment);
-  const session = useStore((s) => s.session);
-  const reset = useStore((s) => s.reset);
+  // Note: session state moved out of the store per Issue 3A — modules own
+  // their own session machines now. The shell reads/cancels via the module
+  // registry instead.
   const toggleSidebar = useStore((s) => s.toggleSidebar);
   const pane = useStore((s) => s.pane);
   const setPane = useStore((s) => s.setPane);
@@ -294,8 +300,15 @@ export default function App() {
         setShortcutsOpen(false);
         return;
       }
-      if (session.kind === "recording" || session.kind === "listening") {
-        reset();
+      // Active module's busy state replaces the old store.session.kind read
+      // (per Issue 3A — module session state is now local to its component).
+      // We check both modules; only the visible one will be busy in
+      // practice (the shell renders one or the other), but checking both is
+      // cheap and makes step 7's "active module" generalization a no-op.
+      const moduleId = pane === "review" ? "srs" : "shadow";
+      const active = getModule(moduleId);
+      if (active?.isBusy()) {
+        active.cancel?.();
         return;
       }
       if (pane === "review") {
@@ -321,7 +334,7 @@ export default function App() {
         onOpenSettings={() => setSettingsOpen(true)}
       >
         {pane === "review" ? (
-          <ReviewMode />
+          <ReviewModeView />
         ) : selectedClipId == null ? (
           <EmptyStateHero />
         ) : selectedSegmentIndex == null ? (

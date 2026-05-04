@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import { useMemo } from "react";
-import { tokenizeForCloze } from "../lib/cloze";
-import { useCard, useSetCardCloze } from "../lib/queries";
+import { tokenizeForCloze } from "../../lib/cloze";
+import { useCard, useSetCardCloze } from "../../lib/queries";
 
 // Tap-to-toggle cloze editor for a saved segment. Renders the segment text
 // as inline word buttons; clicking a word toggles whether that word is
@@ -9,6 +9,10 @@ import { useCard, useSetCardCloze } from "../lib/queries";
 //
 // Editorial styling: clozed words get a hairline strikethrough + slightly
 // recessed color. No icons, no badges — the text itself is the affordance.
+//
+// Per Issue 1A from /plan-eng-review: this lives in the srs module and is
+// imported by Shadow's Session for the during-shadowing edit-card workflow.
+// Cloze stays a presentation mode of card; this editor is the create-side.
 type Props = {
   clipId: number;
   segmentIndex: number;

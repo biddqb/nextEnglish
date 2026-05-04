@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, act } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // Mocks must be declared BEFORE the import that uses them — vi.mock is
-// hoisted, so source order doesn't determine evaluation order, but readability
-// does. Top-of-file mock block keeps fixture wiring discoverable.
+// hoisted, so source order doesn't determine evaluation order, but
+// readability does. Top-of-file mock block keeps fixture wiring discoverable.
 
 const saveCardMutate = vi.fn();
 const unsaveCardMutate = vi.fn();
@@ -17,46 +17,66 @@ const settings = {
   captureHotkey: "Ctrl+Alt+C",
 };
 
-vi.mock("../../lib/queries", () => ({
+vi.mock("../../../lib/queries", () => ({
   useClip: (clipId: number | null) => ({
     data: clipId == null ? undefined : SAMPLE_CLIP_PAYLOAD,
   }),
   useSavedSegments: () => ({ data: savedIndices }),
   useSaveCard: () => ({ mutate: saveCardMutate }),
   useUnsaveCard: () => ({ mutate: unsaveCardMutate }),
+  useSettings: () => settings,
   useSaveAttempt: () => ({
     mutateAsync: vi.fn(async () => "/tmp/fake-attempt.wav"),
   }),
   useScoreAttempt: () => ({
     mutateAsync: vi.fn(async () => SAMPLE_SCORE),
   }),
-  useSettings: () => settings,
   useAttempts: () => ({ data: [] }),
   useCard: () => ({ data: null }),
   useSetCardCloze: () => ({ mutate: vi.fn() }),
 }));
 
-// Stub out the children that pull their own data — we test ShadowSession's
-// own behavior here, not theirs. ClozeEditor / PitchOverlay / AttemptHistory
-// each have their own characterization tests (or are pinned by integration
-// in App.test.tsx, deferred to step 7).
-vi.mock("../../components/ClozeEditor", () => ({
+// Stub the recording hook directly. start()/stop() fire the lifecycle
+// callbacks immediately, so we can drive ShadowSession through the
+// idle → recording → analyzing → scored state machine via clicks alone.
+vi.mock("../../../lib/recording", () => ({
+  useRecordAndScore: ({
+    onRecordingStarted,
+    onAnalyzing,
+    onScored,
+  }: {
+    onRecordingStarted?: () => void;
+    onAnalyzing?: () => void;
+    onScored?: (path: string, score: typeof SAMPLE_SCORE) => void;
+  }) => ({
+    start: vi.fn(async () => {
+      onRecordingStarted?.();
+    }),
+    stop: vi.fn(async () => {
+      onAnalyzing?.();
+      onScored?.("/tmp/fake-attempt.wav", SAMPLE_SCORE);
+    }),
+    cancel: vi.fn(),
+    meter: () => 0,
+  }),
+}));
+
+vi.mock("../../srs/ClozeEditor", () => ({
   ClozeEditor: () => <div data-testid="cloze-editor">cloze stub</div>,
 }));
-vi.mock("../../components/PitchOverlay", () => ({
+vi.mock("../../../components/PitchOverlay", () => ({
   PitchOverlay: () => null,
 }));
-vi.mock("../../components/AttemptHistory", () => ({
+vi.mock("../../../components/AttemptHistory", () => ({
   AttemptHistory: () => null,
 }));
-vi.mock("../../lib/audio", () => ({
+vi.mock("../../../lib/audio", () => ({
   tauriFileUrl: (p: string) => `mock://${p}`,
   startRecording: vi.fn(),
 }));
 
 import { ShadowSession } from "../ShadowSession";
-import { useStore } from "../../lib/store";
-import type { ClipPayload } from "../../lib/api";
+import type { ClipPayload } from "../../../lib/api";
 
 // ─────────────────── fixture data ───────────────────
 
@@ -98,14 +118,11 @@ const SAMPLE_SCORE = {
   user_transcript: "touch base soon",
 };
 
-// Reset shared state between tests so the global zustand store + per-fixture
-// mocks don't leak across cases.
 beforeEach(() => {
   saveCardMutate.mockClear();
   unsaveCardMutate.mockClear();
   savedIndices = [];
   settings.autoLoopMs = 2000;
-  useStore.getState().reset();
 });
 
 // ─────────────────── Test 4: save-card star toggle ───────────────────
@@ -151,7 +168,7 @@ describe("ShadowSession — save-card star toggle", () => {
 // ─────────────────── Test 5: auto-loop countdown ───────────────────
 
 describe("ShadowSession — auto-loop countdown", () => {
-  it("shows the Hold control once the session is in scored state", () => {
+  it("shows the Hold control after a recording cycle reaches scored state", async () => {
     const { container } = render(
       <ShadowSession clipId={1} segmentIndex={0} />,
     );
@@ -159,28 +176,29 @@ describe("ShadowSession — auto-loop countdown", () => {
     // Idle: no countdown surface.
     expect(container.textContent).not.toMatch(/Hold/i);
 
-    // Force the store into scored state directly — same shape ShadowSession
-    // produces after a real score round-trip, without needing MediaRecorder.
-    act(() => {
-      useStore
-        .getState()
-        .setScore(0, "/tmp/fake-attempt.wav", SAMPLE_SCORE);
+    // Drive idle → recording → scored via the record button. The mocked
+    // useRecordAndScore fires onRecordingStarted on start() and onScored
+    // on stop(), so two clicks walk the full cycle.
+    const recordButton = screen.getByRole("button", {
+      name: /(start|stop) recording/i,
     });
+    await userEvent.click(recordButton); // idle → recording
+    await userEvent.click(recordButton); // recording → analyzing → scored
 
     expect(container.textContent ?? "").toMatch(/Hold/i);
   });
 
-  it("hides the Hold control when autoLoopMs is 0 (auto-loop disabled)", () => {
+  it("hides the Hold control when autoLoopMs is 0 (auto-loop disabled)", async () => {
     settings.autoLoopMs = 0;
     const { container } = render(
       <ShadowSession clipId={1} segmentIndex={0} />,
     );
 
-    act(() => {
-      useStore
-        .getState()
-        .setScore(0, "/tmp/fake-attempt.wav", SAMPLE_SCORE);
+    const recordButton = screen.getByRole("button", {
+      name: /(start|stop) recording/i,
     });
+    await userEvent.click(recordButton);
+    await userEvent.click(recordButton);
 
     // ScoreCard should still render (the user can Try again manually), but
     // no Hold/countdown surface.
