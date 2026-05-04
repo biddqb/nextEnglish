@@ -32,6 +32,35 @@ the cache dir and `rm -rf` manually.
 **Blocked by:** —
 **Effort:** ~2 hours.
 
+### Lazy-load module Session components via React.lazy
+**What:** Once the modular registry has 4-5 modules and Voice/Speak pull in their own
+ML/TTS/LLM client SDKs, switch each module's `Session` component to `React.lazy()` so
+only the active module's code is downloaded.
+**Why:** Today's bundle is ~500KB. Voice will pull TTS clients; Speak will pull LLM
+SDKs. Could double or triple the bundle. Lazy-loading keeps initial render fast.
+**Blocked by:** Voice module landing AND a bundle-size measurement showing meaningful
+growth (>1MB). Speculative until then.
+**Effort:** ~1 hour per module + Suspense boundaries in the shell.
+
+### Module enable/disable Settings toggle
+**What:** Per-module on/off toggles in SettingsPanel; `enabled: boolean` field on
+SkillModule; only enabled modules appear in the switcher.
+**Why:** Once 3+ modules ship, you'll want to focus a week on just shadowing or just
+SRS without visual noise from unused modules.
+**Blocked by:** 3+ modules existing. Don't build speculatively.
+**Effort:** ~2 hours.
+
+### Per-module Settings sub-panels
+**What:** Replace the flat `useSettings` shape with per-module settings types via the
+SkillModule interface. SettingsPanel renders a sub-panel per module instead of one
+flat list.
+**Why:** When 4+ modules each contribute 3-5 settings keys, the flat list becomes
+unwieldy. Today (Issue 5A) the convention is `module.key` prefixes; this is the
+upgrade path if/when that gets cramped.
+**Blocked by:** Voice module shipping with multiple settings AND the flat-with-prefix
+UI feeling crowded.
+**Effort:** ~half a weekend.
+
 ---
 
 ## v2 — Pedagogical expansion (after v1 daily use is validated)
