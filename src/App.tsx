@@ -10,6 +10,7 @@ import { getModule } from "./lib/modules";
 const ShadowSession = getModule("shadow")!.ui.Session;
 const ReviewModeView = getModule("srs")!.ui.Session;
 const VoiceSessionView = getModule("voice")!.ui.Session;
+const SpeakSessionView = getModule("speak")!.ui.Session;
 import { ShortcutsOverlay } from "./components/ShortcutsOverlay";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { DropOverlay } from "./components/DropOverlay";
@@ -306,13 +307,19 @@ export default function App() {
       // The shell renders exactly one module at a time; resolve which one
       // is visible from the pane and ask it whether it's busy.
       const moduleId =
-        pane === "review" ? "srs" : pane === "voice" ? "voice" : "shadow";
+        pane === "review"
+          ? "srs"
+          : pane === "voice"
+            ? "voice"
+            : pane === "speak"
+              ? "speak"
+              : "shadow";
       const active = getModule(moduleId);
       if (active?.isBusy()) {
         active.cancel?.();
         return;
       }
-      if (pane === "review" || pane === "voice") {
+      if (pane === "review" || pane === "voice" || pane === "speak") {
         setPane("browse");
       }
     },
@@ -338,6 +345,8 @@ export default function App() {
           <ReviewModeView />
         ) : pane === "voice" ? (
           <VoiceSessionView />
+        ) : pane === "speak" ? (
+          <SpeakSessionView />
         ) : selectedClipId == null ? (
           <EmptyStateHero />
         ) : selectedSegmentIndex == null ? (

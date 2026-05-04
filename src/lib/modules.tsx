@@ -81,6 +81,11 @@ import {
   cancel as voiceCancel,
   isBusy as voiceIsBusy,
 } from "../modules/voice/state";
+import { SpeakSession } from "../modules/speak/SpeakSession";
+import {
+  cancel as speakCancel,
+  isBusy as speakIsBusy,
+} from "../modules/speak/state";
 
 export type ModuleId = "shadow" | "srs" | "voice" | "speak";
 
@@ -154,6 +159,16 @@ function VoiceSessionAdapter(_props: {
   return <VoiceSession />;
 }
 
+// Adapter for Speak: clip-free. Speak owns its own scenario state and
+// drives a TTS prompt → user reply → LLM critique loop; clipId and
+// segmentIndex are ignored, same as Voice.
+function SpeakSessionAdapter(_props: {
+  clipId?: number;
+  segmentIndex?: number;
+}) {
+  return <SpeakSession />;
+}
+
 const shadowModule: SkillModule = {
   id: "shadow",
   displayName: "Shadow",
@@ -187,7 +202,23 @@ const voiceModule: SkillModule = {
   cancel: voiceCancel,
 };
 
-export const modules: SkillModule[] = [shadowModule, srsModule, voiceModule];
+const speakModule: SkillModule = {
+  id: "speak",
+  displayName: "Speak",
+  sidebarOrder: 4,
+  ui: {
+    Session: SpeakSessionAdapter,
+  },
+  isBusy: speakIsBusy,
+  cancel: speakCancel,
+};
+
+export const modules: SkillModule[] = [
+  shadowModule,
+  srsModule,
+  voiceModule,
+  speakModule,
+];
 
 export function getModule(id: ModuleId): SkillModule | undefined {
   return modules.find((m) => m.id === id);

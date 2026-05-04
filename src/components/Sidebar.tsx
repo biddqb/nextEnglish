@@ -93,6 +93,27 @@ export function Sidebar() {
           )}
         </button>
         <button
+          onClick={() => setPane("speak")}
+          aria-label="Open speak conversational practice"
+          title="Speak — LLM-judged conversational practice"
+          className={clsx(
+            "flex w-full items-center justify-between rounded-full border px-md h-[40px] text-button transition-colors",
+            pane === "speak"
+              ? "border-ink bg-ink text-on-primary"
+              : "border-hairline text-muted hover:text-ink hover:border-hairline-strong",
+            collapsed && "px-0 justify-center",
+          )}
+        >
+          {collapsed ? (
+            <span aria-hidden="true">»</span>
+          ) : (
+            <>
+              <span>Speak</span>
+              <span className="text-caption-uppercase">practice</span>
+            </>
+          )}
+        </button>
+        <button
           onClick={() => selectClip(null)}
           className={clsx(
             "button-outline w-full",

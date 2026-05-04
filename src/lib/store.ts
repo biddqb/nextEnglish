@@ -9,8 +9,9 @@ import { create } from "zustand";
 // Top-level main-pane mode. "browse" is the clip-library flow (renders the
 // Shadow module against a selected clip+segment, or the empty state).
 // "review" routes to the SRS module. "voice" routes to the Voice module
-// (clip-free production studio).
-export type PaneMode = "browse" | "review" | "voice";
+// (clip-free production studio). "speak" routes to the Speak module
+// (LLM-judged conversational practice).
+export type PaneMode = "browse" | "review" | "voice" | "speak";
 
 type Store = {
   selectedClipId: number | null;
