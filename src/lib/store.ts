@@ -6,9 +6,11 @@ import { create } from "zustand";
 // only holds genuinely global concerns: which clip + segment is selected,
 // sidebar collapse, and which top-level pane is active.
 
-// Top-level main-pane mode. "browse" is the normal clip-library flow;
-// "review" replaces the main pane with the SRS review queue.
-export type PaneMode = "browse" | "review";
+// Top-level main-pane mode. "browse" is the clip-library flow (renders the
+// Shadow module against a selected clip+segment, or the empty state).
+// "review" routes to the SRS module. "voice" routes to the Voice module
+// (clip-free production studio).
+export type PaneMode = "browse" | "review" | "voice";
 
 type Store = {
   selectedClipId: number | null;

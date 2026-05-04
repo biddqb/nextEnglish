@@ -72,6 +72,27 @@ export function Sidebar() {
           )}
         </button>
         <button
+          onClick={() => setPane("voice")}
+          aria-label="Open voice production studio"
+          title="Voice — filler / pacing / pair drill"
+          className={clsx(
+            "flex w-full items-center justify-between rounded-full border px-md h-[40px] text-button transition-colors",
+            pane === "voice"
+              ? "border-ink bg-ink text-on-primary"
+              : "border-hairline text-muted hover:text-ink hover:border-hairline-strong",
+            collapsed && "px-0 justify-center",
+          )}
+        >
+          {collapsed ? (
+            <span aria-hidden="true">~</span>
+          ) : (
+            <>
+              <span>Voice</span>
+              <span className="text-caption-uppercase">studio</span>
+            </>
+          )}
+        </button>
+        <button
           onClick={() => selectClip(null)}
           className={clsx(
             "button-outline w-full",

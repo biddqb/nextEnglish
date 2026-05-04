@@ -5,10 +5,11 @@ import { SegmentList } from "./components/SegmentList";
 import { getModule } from "./lib/modules";
 
 // Active-pane components, resolved through the module registry. The shell
-// no longer hard-codes specific component imports — adding a third skill
+// no longer hard-codes specific component imports — adding a fourth skill
 // module is now a registry edit, not a shell edit.
 const ShadowSession = getModule("shadow")!.ui.Session;
 const ReviewModeView = getModule("srs")!.ui.Session;
+const VoiceSessionView = getModule("voice")!.ui.Session;
 import { ShortcutsOverlay } from "./components/ShortcutsOverlay";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { DropOverlay } from "./components/DropOverlay";
@@ -302,16 +303,16 @@ export default function App() {
       }
       // Active module's busy state replaces the old store.session.kind read
       // (per Issue 3A — module session state is now local to its component).
-      // We check both modules; only the visible one will be busy in
-      // practice (the shell renders one or the other), but checking both is
-      // cheap and makes step 7's "active module" generalization a no-op.
-      const moduleId = pane === "review" ? "srs" : "shadow";
+      // The shell renders exactly one module at a time; resolve which one
+      // is visible from the pane and ask it whether it's busy.
+      const moduleId =
+        pane === "review" ? "srs" : pane === "voice" ? "voice" : "shadow";
       const active = getModule(moduleId);
       if (active?.isBusy()) {
         active.cancel?.();
         return;
       }
-      if (pane === "review") {
+      if (pane === "review" || pane === "voice") {
         setPane("browse");
       }
     },
@@ -335,6 +336,8 @@ export default function App() {
       >
         {pane === "review" ? (
           <ReviewModeView />
+        ) : pane === "voice" ? (
+          <VoiceSessionView />
         ) : selectedClipId == null ? (
           <EmptyStateHero />
         ) : selectedSegmentIndex == null ? (

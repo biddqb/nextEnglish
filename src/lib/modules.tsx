@@ -76,6 +76,11 @@ import {
   cancel as srsCancel,
   isBusy as srsIsBusy,
 } from "../modules/srs/state";
+import { VoiceSession } from "../modules/voice/VoiceSession";
+import {
+  cancel as voiceCancel,
+  isBusy as voiceIsBusy,
+} from "../modules/voice/state";
 
 export type ModuleId = "shadow" | "srs" | "voice" | "speak";
 
@@ -140,6 +145,15 @@ function ReviewModeAdapter(_props: { clipId?: number; segmentIndex?: number }) {
   return <ReviewMode />;
 }
 
+// Adapter for Voice: clip-free. Voice records standalone takes; clipId
+// and segmentIndex are ignored.
+function VoiceSessionAdapter(_props: {
+  clipId?: number;
+  segmentIndex?: number;
+}) {
+  return <VoiceSession />;
+}
+
 const shadowModule: SkillModule = {
   id: "shadow",
   displayName: "Shadow",
@@ -162,7 +176,18 @@ const srsModule: SkillModule = {
   cancel: srsCancel,
 };
 
-export const modules: SkillModule[] = [shadowModule, srsModule];
+const voiceModule: SkillModule = {
+  id: "voice",
+  displayName: "Voice",
+  sidebarOrder: 3,
+  ui: {
+    Session: VoiceSessionAdapter,
+  },
+  isBusy: voiceIsBusy,
+  cancel: voiceCancel,
+};
+
+export const modules: SkillModule[] = [shadowModule, srsModule, voiceModule];
 
 export function getModule(id: ModuleId): SkillModule | undefined {
   return modules.find((m) => m.id === id);
