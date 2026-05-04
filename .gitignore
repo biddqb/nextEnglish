@@ -38,3 +38,6 @@ logs/
 *.bin
 *.onnx
 models/
+
+# Project-local Claude Code state (scheduled tasks, local settings)
+.claude/
