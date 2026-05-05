@@ -186,10 +186,20 @@ export const api = {
       audioBase64,
       extension,
     }),
+
+  speakTts: (text: string) => call<SpeakTtsData>("speak_tts", { text }),
 };
 
 export type VoiceTranscribeData = {
   segments: Segment[];
+  duration_ms: number;
+};
+
+// Speak module: synthesized prompt audio (absolute path + duration). The
+// path is already resolved on the Rust side, so the frontend can pass it
+// straight to tauriFileUrl() for an HTMLAudioElement.
+export type SpeakTtsData = {
+  audio_path: string;
   duration_ms: number;
 };
 

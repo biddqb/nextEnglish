@@ -21,7 +21,7 @@ use tracing::{error, info};
 use crate::error::ErrorEnvelope;
 use crate::models::{
     AttemptRow, CardRow, Clip, ClipRow, DueCard, ScoreData, Segment, SegmentRow,
-    VoiceTranscribeData,
+    SpeakTtsData, VoiceTranscribeData,
 };
 use crate::sidecar::{PitchContoursResponse, ProbeResult, Sidecar};
 use crate::Database;
@@ -1199,6 +1199,33 @@ pub async fn transcribe_voice_audio(
         .map_err(CmdError::from)?;
 
     Ok(result)
+}
+
+/// Speak module: render `text` to a WAV via the existing Piper pipeline
+/// (offline, cached per-text in the sidecar) and return an absolute path
+/// the frontend can play via `tauriFileUrl()`. Mirrors how `capture_chunk`
+/// uses `state.sidecar.tts(...)`, but exposed as its own command so the
+/// Speak module can request prompt audio without going through capture's
+/// DB persistence path.
+#[tauri::command]
+pub async fn speak_tts(
+    state: State<'_, AppState>,
+    text: String,
+) -> Result<SpeakTtsData, CmdError> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Err(cmd_err("INTERNAL", "speak_tts: empty text"));
+    }
+    let tts = state
+        .sidecar
+        .tts(trimmed, "en")
+        .await
+        .map_err(CmdError::from)?;
+    let abs_audio = state.resolve(&tts.audio_path);
+    Ok(SpeakTtsData {
+        audio_path: abs_audio.to_string_lossy().into_owned(),
+        duration_ms: tts.duration_ms,
+    })
 }
 
 async fn slice_audio(

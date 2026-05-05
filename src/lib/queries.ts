@@ -406,6 +406,17 @@ export function useTranscribeVoiceAudio() {
   });
 }
 
+// Speak module: synthesize a prompt to a WAV via Piper. The sidecar
+// caches per-text on disk so re-firing the same prompt is cheap. We
+// don't bother with react-query caching here — Piper's own disk cache
+// is the source of truth and we want a fresh path per invocation in
+// case the user edits a freeform topic.
+export function useSpeakTts() {
+  return useMutation({
+    mutationFn: (text: string) => api.speakTts(text),
+  });
+}
+
 // Optimistic helper: a "most recent first" sorted clips list (the sidebar
 // already orders DESC on created_at server-side, but useful for UI sort
 // guarantees if needed).

@@ -60,6 +60,15 @@ pub struct VoiceTranscribeData {
     pub duration_ms: i64,
 }
 
+/// Speak module: synthesized prompt audio. The audio_path is absolute
+/// (sidecar-relative paths are resolved before the command returns) so
+/// the frontend can pass it directly to `tauriFileUrl()` for playback.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpeakTtsData {
+    pub audio_path: String,
+    pub duration_ms: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClipRow {
     pub id: i64,
