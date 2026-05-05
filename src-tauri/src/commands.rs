@@ -1261,9 +1261,9 @@ pub async fn speak_judge(
     let mut api_key: Option<String> = None;
     for (k, v) in pairs {
         match k.as_str() {
-            "speak.llm_provider" if !v.is_empty() => provider = v,
-            "speak.llm_model" if !v.is_empty() => model = Some(v),
-            "speak.llm_api_key" if !v.is_empty() => api_key = Some(v),
+            "speak_llm_provider" if !v.is_empty() => provider = v,
+            "speak_llm_model" if !v.is_empty() => model = Some(v),
+            "speak_llm_api_key" if !v.is_empty() => api_key = Some(v),
             _ => {}
         }
     }

@@ -89,6 +89,13 @@ export type AppSettings = {
   autoLoopMs: number;
   obsidianVaultPath: string;
   captureHotkey: string;
+  // Speak module: which LLM judges replies. Provider is one of
+  // ollama / anthropic / openai. Model is provider-specific (empty
+  // means the provider's default). API key is required for
+  // anthropic/openai; ignored for ollama.
+  speakLlmProvider: "ollama" | "anthropic" | "openai";
+  speakLlmModel: string;
+  speakLlmApiKey: string;
 };
 
 export type ExportResult = {

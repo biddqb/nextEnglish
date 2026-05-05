@@ -7,6 +7,7 @@ import {
   useSettings,
 } from "../lib/queries";
 import {
+  LLM_PROVIDERS,
   SETTING_KEYS,
   WHISPER_MODELS,
   defaultAppSettings,
@@ -35,6 +36,13 @@ export function SettingsPanel({ open, onClose }: Props) {
     settings.captureHotkey,
   );
   const [hotkeyError, setHotkeyError] = useState<string | null>(null);
+  const [speakModelDraft, setSpeakModelDraft] = useState(settings.speakLlmModel);
+  const [speakApiKeyDraft, setSpeakApiKeyDraft] = useState(
+    settings.speakLlmApiKey,
+  );
+  const activeProvider = LLM_PROVIDERS.find(
+    (p) => p.id === settings.speakLlmProvider,
+  )!;
 
   // Local mirrors so the user can edit numeric inputs without each keystroke
   // hitting SQLite. Synced from settings on open and on background updates.
@@ -49,6 +57,8 @@ export function SettingsPanel({ open, onClose }: Props) {
       setAutoLoopS(settings.autoLoopMs / 1000);
       setVaultPathDraft(settings.obsidianVaultPath);
       setCaptureHotkeyDraft(settings.captureHotkey);
+      setSpeakModelDraft(settings.speakLlmModel);
+      setSpeakApiKeyDraft(settings.speakLlmApiKey);
       setConfirmClear(false);
       setExportFeedback(null);
       setHotkeyError(null);
@@ -59,6 +69,8 @@ export function SettingsPanel({ open, onClose }: Props) {
     settings.autoLoopMs,
     settings.obsidianVaultPath,
     settings.captureHotkey,
+    settings.speakLlmModel,
+    settings.speakLlmApiKey,
   ]);
 
   // Lock background scroll while the modal is up.
@@ -113,6 +125,31 @@ export function SettingsPanel({ open, onClose }: Props) {
     }
     setHotkeyError(null);
     setSetting.mutate({ key: SETTING_KEYS.captureHotkey, value: next });
+  }
+
+  function chooseLlmProvider(id: typeof LLM_PROVIDERS[number]["id"]) {
+    setSetting.mutate({ key: SETTING_KEYS.speakLlmProvider, value: id });
+    // Switching providers also clears the per-provider model override so
+    // the new provider's default kicks in. The user can re-fill the field
+    // if they want to pin a non-default model.
+    setSpeakModelDraft("");
+    setSetting.mutate({ key: SETTING_KEYS.speakLlmModel, value: null });
+  }
+
+  function commitSpeakModel() {
+    const next = speakModelDraft.trim();
+    setSetting.mutate({
+      key: SETTING_KEYS.speakLlmModel,
+      value: next === "" ? null : next,
+    });
+  }
+
+  function commitSpeakApiKey() {
+    const next = speakApiKeyDraft.trim();
+    setSetting.mutate({
+      key: SETTING_KEYS.speakLlmApiKey,
+      value: next === "" ? null : next,
+    });
   }
 
   function resetHotkey() {
@@ -232,6 +269,74 @@ export function SettingsPanel({ open, onClose }: Props) {
               <span className="text-caption-uppercase text-muted">
                 seconds
               </span>
+            </div>
+          </Section>
+
+          <Section
+            title="Speak — LLM judge"
+            hint="Which model evaluates your spoken replies in the Speak module. Ollama runs locally and works offline; Anthropic and OpenAI are cloud services that need an API key."
+          >
+            <div className="space-y-xs">
+              {LLM_PROVIDERS.map((p) => (
+                <label
+                  key={p.id}
+                  className="flex items-baseline gap-sm cursor-pointer rounded-md p-xs hover:bg-surface-strong/50"
+                >
+                  <input
+                    type="radio"
+                    name="speak-llm-provider"
+                    checked={settings.speakLlmProvider === p.id}
+                    onChange={() => chooseLlmProvider(p.id)}
+                    className="accent-ink"
+                  />
+                  <span className="text-body-md text-ink">{p.label}</span>
+                </label>
+              ))}
+            </div>
+            <div className="mt-base text-caption text-muted">
+              {activeProvider.hint}
+            </div>
+            <div className="mt-base grid grid-cols-1 gap-sm">
+              <label className="text-caption-uppercase text-muted">
+                Model
+                <input
+                  type="text"
+                  value={speakModelDraft}
+                  onChange={(e) => setSpeakModelDraft(e.target.value)}
+                  onBlur={commitSpeakModel}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      (e.target as HTMLInputElement).blur();
+                    }
+                  }}
+                  placeholder={activeProvider.defaultModel}
+                  className="text-input mt-xxs w-full font-mono"
+                />
+              </label>
+              {activeProvider.needsApiKey && (
+                <label className="text-caption-uppercase text-muted">
+                  API key
+                  <input
+                    type="password"
+                    value={speakApiKeyDraft}
+                    onChange={(e) => setSpeakApiKeyDraft(e.target.value)}
+                    onBlur={commitSpeakApiKey}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        (e.target as HTMLInputElement).blur();
+                      }
+                    }}
+                    placeholder={
+                      activeProvider.id === "anthropic"
+                        ? "sk-ant-…"
+                        : "sk-…"
+                    }
+                    className="text-input mt-xxs w-full font-mono"
+                  />
+                </label>
+              )}
             </div>
           </Section>
 
