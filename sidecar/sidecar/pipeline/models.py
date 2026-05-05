@@ -191,3 +191,17 @@ class SpeakCritique(BaseModel):
 class SpeakJudgeResponse(BaseModel):
     ok: Literal[True] = True
     critique: SpeakCritique
+
+
+class SpeakScenario(BaseModel):
+    """One curated scenario from the Speak corpus. id is stable across
+    builds so the frontend can persist 'most-recent scenarios' later."""
+    id: str
+    category: str
+    title: str
+    prompt: str
+
+
+class SpeakScenariosResponse(BaseModel):
+    ok: Literal[True] = True
+    scenarios: list[SpeakScenario]

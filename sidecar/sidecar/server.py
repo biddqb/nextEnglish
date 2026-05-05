@@ -21,6 +21,7 @@ from .pipeline.models import (
     PitchContour, PitchRequest, PitchResponse,
     ScoreRequest, ScoreResponse, ScoreData, Clip,
     SpeakCritique, SpeakJudgeRequest, SpeakJudgeResponse,
+    SpeakScenario, SpeakScenariosResponse,
     TtsRequest, TtsResponse,
     VoiceTranscribeRequest, VoiceTranscribeResponse,
 )
@@ -380,6 +381,17 @@ async def speak_judge(req: SpeakJudgeRequest):
         return _err("INTERNAL", f"judge failed: {type(e).__name__}: {e}", status=500)
 
     return SpeakJudgeResponse(critique=SpeakCritique(**critique_dict))
+
+
+@app.get("/speak/scenarios")
+def speak_scenarios():
+    """Speak module: return the curated scenario corpus. The frontend
+    uses this to populate the picker. Stable order; new scenarios are
+    appended in corpus.py (their ids are durable references)."""
+    from .speak.corpus import list_scenarios
+    return SpeakScenariosResponse(
+        scenarios=[SpeakScenario(**s) for s in list_scenarios()],
+    )
 
 
 def run():

@@ -21,7 +21,7 @@ use tracing::{error, info};
 use crate::error::ErrorEnvelope;
 use crate::models::{
     AttemptRow, CardRow, Clip, ClipRow, DueCard, ScoreData, Segment, SegmentRow,
-    SpeakCritique, SpeakHistoryTurn, SpeakTtsData, VoiceTranscribeData,
+    SpeakCritique, SpeakHistoryTurn, SpeakScenario, SpeakTtsData, VoiceTranscribeData,
 };
 use crate::sidecar::{PitchContoursResponse, ProbeResult, Sidecar};
 use crate::Database;
@@ -1281,6 +1281,19 @@ pub async fn speak_judge(
         .await
         .map_err(CmdError::from)?;
     Ok(critique)
+}
+
+/// Speak module: list the curated scenario corpus. Read-only — corpus
+/// lives in sidecar/sidecar/speak/corpus.py.
+#[tauri::command]
+pub async fn speak_scenarios(
+    state: State<'_, AppState>,
+) -> Result<Vec<SpeakScenario>, CmdError> {
+    state
+        .sidecar
+        .speak_scenarios()
+        .await
+        .map_err(CmdError::from)
 }
 
 async fn slice_audio(

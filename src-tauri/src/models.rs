@@ -90,6 +90,16 @@ pub struct SpeakCritique {
     pub follow_up_question: String,
 }
 
+/// Speak module: one curated scenario. `id` is stable across builds so
+/// the frontend can persist a most-recent list later.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpeakScenario {
+    pub id: String,
+    pub category: String,
+    pub title: String,
+    pub prompt: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClipRow {
     pub id: i64,

@@ -19,7 +19,9 @@ use tokio::process::{Child, Command};
 use tracing::{debug, info, warn};
 
 use crate::error::{Error, ErrorEnvelope, Result};
-use crate::models::{Clip, ScoreData, SpeakCritique, SpeakHistoryTurn, VoiceTranscribeData};
+use crate::models::{
+    Clip, ScoreData, SpeakCritique, SpeakHistoryTurn, SpeakScenario, VoiceTranscribeData,
+};
 
 const SPAWN_TIMEOUT: Duration = Duration::from_secs(30);
 const HEALTH_TIMEOUT: Duration = Duration::from_secs(5);
@@ -369,6 +371,31 @@ impl Sidecar {
         parse_speak_judge(resp)
     }
 
+    /// Speak module: fetch the curated scenario corpus. Stable order;
+    /// the sidecar's corpus.py is the source of truth.
+    pub async fn speak_scenarios(&self) -> Result<Vec<SpeakScenario>> {
+        let url = format!("{}/speak/scenarios", self.base_url);
+        let resp = self.client.get(&url).send().await?;
+        let status = resp.status();
+        let text = resp.text().await?;
+        let value: serde_json::Value = serde_json::from_str(&text).map_err(|e| {
+            Error::malformed(format!(
+                "non-JSON response from /speak/scenarios (status {status}): {e}",
+            ))
+        })?;
+        if !status.is_success() {
+            if let Some(err_field) = value.get("error") {
+                if let Ok(env) = serde_json::from_value::<ErrorEnvelope>(err_field.clone()) {
+                    return Err(Error::Api(env));
+                }
+            }
+            return Err(Error::malformed(format!(
+                "speak/scenarios returned status {status}: {value}"
+            )));
+        }
+        parse_speak_scenarios(value)
+    }
+
     async fn post_json(&self, path: &str, body: &serde_json::Value) -> Result<serde_json::Value> {
         let url = format!("{}{}", self.base_url, path);
         let resp = self.client.post(&url).json(body).send().await?;
@@ -556,6 +583,30 @@ fn parse_speak_judge(value: serde_json::Value) -> Result<SpeakCritique> {
             ErrorEnvelope::new(
                 crate::error::ErrorCode::Internal,
                 "speak/judge returned ok=false but no error envelope",
+            )
+        })))
+    }
+}
+
+#[derive(Deserialize)]
+struct SpeakScenariosRawResponse {
+    ok: bool,
+    #[serde(default)]
+    scenarios: Option<Vec<SpeakScenario>>,
+    #[serde(default)]
+    error: Option<ErrorEnvelope>,
+}
+
+fn parse_speak_scenarios(value: serde_json::Value) -> Result<Vec<SpeakScenario>> {
+    let raw: SpeakScenariosRawResponse = serde_json::from_value(value)?;
+    if raw.ok {
+        raw.scenarios
+            .ok_or_else(|| Error::malformed("speak/scenarios response missing 'scenarios'"))
+    } else {
+        Err(Error::Api(raw.error.unwrap_or_else(|| {
+            ErrorEnvelope::new(
+                crate::error::ErrorCode::Internal,
+                "speak/scenarios returned ok=false but no error envelope",
             )
         })))
     }

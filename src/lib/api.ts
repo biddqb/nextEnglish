@@ -199,6 +199,8 @@ export const api = {
       userTranscript,
       history,
     }),
+
+  speakScenarios: () => call<SpeakScenario[]>("speak_scenarios"),
 };
 
 export type VoiceTranscribeData = {
@@ -228,6 +230,15 @@ export type SpeakCritique = {
   strengths: string[];
   improvements: string[];
   follow_up_question: string;
+};
+
+// Speak module: one curated scenario from the sidecar corpus. `id` is
+// stable across builds — safe to persist as a "most-recent" reference.
+export type SpeakScenario = {
+  id: string;
+  category: string;
+  title: string;
+  prompt: string;
 };
 
 // Returned by get_clip — includes the full segments list (with words) plus

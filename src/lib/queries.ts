@@ -431,6 +431,17 @@ export function useSpeakJudge() {
   });
 }
 
+// Speak module: fetch the curated scenario corpus. Long stale time —
+// the corpus is shipped with the sidecar and only changes between
+// app builds, so refetching during a session is wasted effort.
+export function useSpeakScenarios() {
+  return useQuery({
+    queryKey: ["speak-scenarios"] as const,
+    queryFn: api.speakScenarios,
+    staleTime: Infinity,
+  });
+}
+
 // Optimistic helper: a "most recent first" sorted clips list (the sidebar
 // already orders DESC on created_at server-side, but useful for UI sort
 // guarantees if needed).
