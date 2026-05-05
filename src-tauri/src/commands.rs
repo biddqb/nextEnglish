@@ -21,7 +21,7 @@ use tracing::{error, info};
 use crate::error::ErrorEnvelope;
 use crate::models::{
     AttemptRow, CardRow, Clip, ClipRow, DueCard, ScoreData, Segment, SegmentRow,
-    SpeakTtsData, VoiceTranscribeData,
+    SpeakCritique, SpeakHistoryTurn, SpeakTtsData, VoiceTranscribeData,
 };
 use crate::sidecar::{PitchContoursResponse, ProbeResult, Sidecar};
 use crate::Database;
@@ -1226,6 +1226,61 @@ pub async fn speak_tts(
         audio_path: abs_audio.to_string_lossy().into_owned(),
         duration_ms: tts.duration_ms,
     })
+}
+
+/// Speak module: judge a spoken reply against a scenario via the user's
+/// configured LLM. Reads provider/model/api_key from the settings table
+/// here (sidecar stays settings-agnostic) and forwards to /speak/judge.
+///
+/// `history` is the prior turns from a go-deeper sequence; empty for a
+/// first turn. The current reply travels separately as `user_transcript`.
+#[tauri::command]
+pub async fn speak_judge(
+    state: State<'_, AppState>,
+    scenario: String,
+    user_transcript: String,
+    history: Vec<SpeakHistoryTurn>,
+) -> Result<SpeakCritique, CmdError> {
+    let trimmed_scn = scenario.trim();
+    let trimmed_txt = user_transcript.trim();
+    if trimmed_scn.is_empty() {
+        return Err(cmd_err("INTERNAL", "speak_judge: empty scenario"));
+    }
+    if trimmed_txt.is_empty() {
+        return Err(cmd_err("INTERNAL", "speak_judge: empty user_transcript"));
+    }
+
+    // Read provider config from the settings table. Defaults: ollama, no
+    // model override (provider picks its own default), no API key.
+    let pairs = {
+        let db = state.db.lock().await;
+        db.list_settings().map_err(CmdError::from)?
+    };
+    let mut provider = "ollama".to_string();
+    let mut model: Option<String> = None;
+    let mut api_key: Option<String> = None;
+    for (k, v) in pairs {
+        match k.as_str() {
+            "speak.llm_provider" if !v.is_empty() => provider = v,
+            "speak.llm_model" if !v.is_empty() => model = Some(v),
+            "speak.llm_api_key" if !v.is_empty() => api_key = Some(v),
+            _ => {}
+        }
+    }
+
+    let critique = state
+        .sidecar
+        .speak_judge(
+            trimmed_scn,
+            trimmed_txt,
+            &history,
+            &provider,
+            model.as_deref(),
+            api_key.as_deref(),
+        )
+        .await
+        .map_err(CmdError::from)?;
+    Ok(critique)
 }
 
 async fn slice_audio(

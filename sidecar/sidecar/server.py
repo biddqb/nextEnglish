@@ -20,6 +20,7 @@ from .pipeline.models import (
     ApiError, ErrorEnvelope, IngestRequest, IngestResponse,
     PitchContour, PitchRequest, PitchResponse,
     ScoreRequest, ScoreResponse, ScoreData, Clip,
+    SpeakCritique, SpeakJudgeRequest, SpeakJudgeResponse,
     TtsRequest, TtsResponse,
     VoiceTranscribeRequest, VoiceTranscribeResponse,
 )
@@ -343,6 +344,42 @@ def voice_transcribe(req: VoiceTranscribeRequest):
         segments=segments,
         duration_ms=int(duration_s * 1000),
     )
+
+
+@app.post("/speak/judge")
+async def speak_judge(req: SpeakJudgeRequest):
+    """Speak module: send a scenario + the user's transcribed reply (and
+    optional history of prior go-deeper turns) to whichever LLM the user
+    selected, return a structured critique. Provider config travels with
+    the request (Rust reads SQLite settings before sending).
+
+    LLM-side errors (Ollama down, missing model, bad API key) come back
+    as structured ApiError envelopes so the UI can show a real message
+    instead of a generic 500."""
+    from .speak.judge import run_judge
+    from .speak.providers import LlmError, build_provider
+
+    try:
+        provider = build_provider(req.provider, req.model, req.api_key)
+    except LlmError as e:
+        return _err(e.code, e.message, e.retryable, status=400)
+
+    try:
+        critique_dict = await run_judge(
+            provider,
+            scenario=req.scenario,
+            user_transcript=req.user_transcript,
+            history=[t.model_dump() for t in req.history],
+        )
+    except LlmError as e:
+        # Provider-side failures with a known message; surface verbatim.
+        status = 502 if e.retryable else 500
+        return _err(e.code, e.message, e.retryable, status=status)
+    except Exception as e:
+        logger.exception("speak/judge failed")
+        return _err("INTERNAL", f"judge failed: {type(e).__name__}: {e}", status=500)
+
+    return SpeakJudgeResponse(critique=SpeakCritique(**critique_dict))
 
 
 def run():

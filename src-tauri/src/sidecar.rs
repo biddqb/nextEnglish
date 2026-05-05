@@ -19,7 +19,7 @@ use tokio::process::{Child, Command};
 use tracing::{debug, info, warn};
 
 use crate::error::{Error, ErrorEnvelope, Result};
-use crate::models::{Clip, ScoreData, VoiceTranscribeData};
+use crate::models::{Clip, ScoreData, SpeakCritique, SpeakHistoryTurn, VoiceTranscribeData};
 
 const SPAWN_TIMEOUT: Duration = Duration::from_secs(30);
 const HEALTH_TIMEOUT: Duration = Duration::from_secs(5);
@@ -340,6 +340,35 @@ impl Sidecar {
         parse_voice_transcribe(resp)
     }
 
+    /// Speak module: send a scenario + the user's transcribed reply (and
+    /// any prior go-deeper turns) to whichever LLM the user selected,
+    /// return a structured critique. Provider/model/api_key travel with
+    /// the request — the sidecar is settings-agnostic.
+    pub async fn speak_judge(
+        &self,
+        scenario: &str,
+        user_transcript: &str,
+        history: &[SpeakHistoryTurn],
+        provider: &str,
+        model: Option<&str>,
+        api_key: Option<&str>,
+    ) -> Result<SpeakCritique> {
+        let mut body = serde_json::json!({
+            "scenario": scenario,
+            "user_transcript": user_transcript,
+            "history": history,
+            "provider": provider,
+        });
+        if let Some(m) = model {
+            body["model"] = serde_json::Value::String(m.to_string());
+        }
+        if let Some(k) = api_key {
+            body["api_key"] = serde_json::Value::String(k.to_string());
+        }
+        let resp = self.post_json("/speak/judge", &body).await?;
+        parse_speak_judge(resp)
+    }
+
     async fn post_json(&self, path: &str, body: &serde_json::Value) -> Result<serde_json::Value> {
         let url = format!("{}{}", self.base_url, path);
         let resp = self.client.post(&url).json(body).send().await?;
@@ -503,6 +532,30 @@ fn parse_voice_transcribe(value: serde_json::Value) -> Result<VoiceTranscribeDat
             ErrorEnvelope::new(
                 crate::error::ErrorCode::Internal,
                 "voice transcribe returned ok=false but no error envelope",
+            )
+        })))
+    }
+}
+
+#[derive(Deserialize)]
+struct SpeakJudgeRawResponse {
+    ok: bool,
+    #[serde(default)]
+    critique: Option<SpeakCritique>,
+    #[serde(default)]
+    error: Option<ErrorEnvelope>,
+}
+
+fn parse_speak_judge(value: serde_json::Value) -> Result<SpeakCritique> {
+    let raw: SpeakJudgeRawResponse = serde_json::from_value(value)?;
+    if raw.ok {
+        raw.critique
+            .ok_or_else(|| Error::malformed("speak/judge response missing 'critique'"))
+    } else {
+        Err(Error::Api(raw.error.unwrap_or_else(|| {
+            ErrorEnvelope::new(
+                crate::error::ErrorCode::Internal,
+                "speak/judge returned ok=false but no error envelope",
             )
         })))
     }

@@ -25,6 +25,10 @@ dependencies = [
     # Replaces an earlier gTTS dependency that violated the project's
     # offline-first guarantee (see memory/project_offline_first.md).
     "piper-tts>=1.2",
+    # Async HTTP for /speak/judge (Ollama / Anthropic / OpenAI). Already
+    # present transitively via fastapi; pinned here so speak.providers has
+    # an explicit contract.
+    "httpx>=0.27",
 ]
 
 [project.optional-dependencies]

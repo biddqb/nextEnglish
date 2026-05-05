@@ -102,6 +102,7 @@ pub fn run() {
             commands::export_to_obsidian,
             commands::transcribe_voice_audio,
             commands::speak_tts,
+            commands::speak_judge,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

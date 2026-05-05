@@ -188,6 +188,17 @@ export const api = {
     }),
 
   speakTts: (text: string) => call<SpeakTtsData>("speak_tts", { text }),
+
+  speakJudge: (
+    scenario: string,
+    userTranscript: string,
+    history: SpeakHistoryTurn[],
+  ) =>
+    call<SpeakCritique>("speak_judge", {
+      scenario,
+      userTranscript,
+      history,
+    }),
 };
 
 export type VoiceTranscribeData = {
@@ -201,6 +212,22 @@ export type VoiceTranscribeData = {
 export type SpeakTtsData = {
   audio_path: string;
   duration_ms: number;
+};
+
+// Speak module: one prior turn in a go-deeper conversation. The current
+// turn travels separately as the `userTranscript` arg.
+export type SpeakHistoryTurn = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+// Speak module: structured critique. Bullet lists may be empty.
+export type SpeakCritique = {
+  score_overall: number;
+  feedback: string;
+  strengths: string[];
+  improvements: string[];
+  follow_up_question: string;
 };
 
 // Returned by get_clip — includes the full segments list (with words) plus

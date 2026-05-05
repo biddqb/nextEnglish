@@ -149,3 +149,45 @@ class VoiceTranscribeResponse(BaseModel):
     # Total audio duration (ms) — useful for WPM calculations even when the
     # last word's `end` doesn't reach the end of the recording.
     duration_ms: int
+
+
+# ─────────────────── Speak module ───────────────────
+
+
+class SpeakHistoryTurn(BaseModel):
+    """One prior turn in a go-deeper sequence. role is "user" or
+    "assistant"; content is the raw text from that turn (transcribed user
+    reply, or the LLM's prior response). The current turn is sent
+    separately as `user_transcript` and is NOT in history."""
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class SpeakJudgeRequest(BaseModel):
+    """Frontend → Rust → sidecar request for a single critique pass.
+    Provider config travels with the request so the sidecar stays
+    settings-agnostic; Rust reads the user's settings before sending."""
+    scenario: str
+    user_transcript: str
+    history: list[SpeakHistoryTurn] = Field(default_factory=list)
+    # ollama / anthropic / openai (case-insensitive). Default ollama per
+    # design — we want offline-first to be the path of least resistance.
+    provider: Literal["ollama", "anthropic", "openai"] = "ollama"
+    model: Optional[str] = None
+    # Required for anthropic/openai; ignored for ollama.
+    api_key: Optional[str] = None
+
+
+class SpeakCritique(BaseModel):
+    """Structured critique returned to the UI. score_overall is a 0-100
+    integer; the bullet lists are 0-3 short items each."""
+    score_overall: int
+    feedback: str
+    strengths: list[str] = Field(default_factory=list)
+    improvements: list[str] = Field(default_factory=list)
+    follow_up_question: str = ""
+
+
+class SpeakJudgeResponse(BaseModel):
+    ok: Literal[True] = True
+    critique: SpeakCritique

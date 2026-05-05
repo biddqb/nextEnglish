@@ -417,6 +417,20 @@ export function useSpeakTts() {
   });
 }
 
+// Speak module: judge a spoken reply via the user's configured LLM. The
+// Rust command reads provider/model/api_key from the settings table
+// before forwarding; the frontend just provides the conversational
+// context (scenario + transcript + prior turns).
+export function useSpeakJudge() {
+  return useMutation({
+    mutationFn: (args: {
+      scenario: string;
+      userTranscript: string;
+      history: import("./api").SpeakHistoryTurn[];
+    }) => api.speakJudge(args.scenario, args.userTranscript, args.history),
+  });
+}
+
 // Optimistic helper: a "most recent first" sorted clips list (the sidebar
 // already orders DESC on created_at server-side, but useful for UI sort
 // guarantees if needed).

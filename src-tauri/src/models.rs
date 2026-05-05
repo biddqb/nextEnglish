@@ -69,6 +69,27 @@ pub struct SpeakTtsData {
     pub duration_ms: i64,
 }
 
+/// Speak module: one prior turn in a go-deeper conversation. The current
+/// turn (the one being judged) travels separately as `user_transcript`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpeakHistoryTurn {
+    pub role: String, // "user" | "assistant"
+    pub content: String,
+}
+
+/// Speak module: structured critique returned from /speak/judge.
+/// `score_overall` is 0-100; `strengths` and `improvements` are 0-3 short
+/// items each; `follow_up_question` is empty when the model didn't
+/// suggest one (single-turn flow with go-deeper disabled).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpeakCritique {
+    pub score_overall: i64,
+    pub feedback: String,
+    pub strengths: Vec<String>,
+    pub improvements: Vec<String>,
+    pub follow_up_question: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClipRow {
     pub id: i64,
